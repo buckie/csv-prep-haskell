@@ -3,8 +3,11 @@
 
 import           Control.Applicative
 import           Control.Monad
-import           Data.Attoparsec.ByteString.Char8
-import           Data.ByteString.Char8
+import qualified Data.Attoparsec.ByteString as AB
+import qualified Data.Attoparsec.ByteString.Lazy as ABL
+import qualified Data.Attoparsec.ByteString.Char8 as AB8
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.Lazy             as BL
 import           Data.Char                        (isPrint)
 import qualified Data.Csv                         as CSV
@@ -22,10 +25,10 @@ type WFieldName = [Char]
 
 type WLineParser = [WFieldParser]
 
-data WVal = WValB ByteString | WValI Int
+data WVal = WValB B8.ByteString | WValI Int
 	deriving (Eq, Show)
 
-mkWValB :: ByteString -> WVal
+mkWValB :: B8.ByteString -> WVal
 mkWValB x = WValB x
 
 mkWValI :: Int -> WVal
@@ -33,25 +36,25 @@ mkWValI x = WValI x
 
 type WFieldResult = Either
 
-wParseLine :: [WFieldParser] -> [ByteString] -> [Either [Char] WVal]
+wParseLine :: [WFieldParser] -> [BL.ByteString] -> [Either [Char] WVal]
 wParseLine _ [] = []
 wParseLine [] _ = []
 wParseLine (x:xs) (y:ys) = (wParseField x y) : wParseLine xs ys
 
-wParseField :: WFieldParser -> ByteString -> Either [Char] WVal
+wParseField :: WFieldParser -> BL.ByteString -> Either [Char] WVal
 wParseField (WFieldParser wfname WChar) y = r
 	where
-		r = case parseOnly nonNullText y of
+		r = case (ABL.eitherResult . (ABL.parse nonNullText) $ y) of
 				Left z -> Left $ "Parse Failure on " ++ wfname ++ ": " ++ z
 				Right z -> Right $ mkWValB z
 wParseField (WFieldParser wfname WInt) y = r
 	where
-		r = case parseOnly decimal y of
+		r = case (ABL.eitherResult . (ABL.parse AB8.decimal) $ y) of
 				Left z -> Left $ "Parse Failure on " ++ wfname ++ ": " ++ z
 				Right z -> Right $ mkWValI z
 
-nonNullText :: Parser ByteString
-nonNullText = takeWhile1 isPrint
+nonNullText :: AB8.Parser B8.ByteString
+nonNullText = AB8.takeWhile1 isPrint
 
 fieldNames :: [[Char]]
 fieldNames = ["name","salary","age","loc"]
@@ -71,6 +74,5 @@ runCsvParser csvData = do
 main = do
     csvData <- BL.readFile "salaries_locs.csv"
     parsed <- runCsvParser csvData
-    return parsed
-    -- return $ fmap (wParseLine wParserSpec) parsed
+    return $ fmap (wParseLine wParserSpec) parsed
 
